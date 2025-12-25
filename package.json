@@ -20,7 +20,7 @@
     "taut": "./cli/cli.js"
   },
   "scripts": {
-    "build": "bun ./scripts/build.ts",
+    "build": "bun ./scripts/buildDeps.ts",
     "format": "prettier --write .",
     "taut-cli": "bun ./cli/cli.js"
   },

@@ -26,6 +26,7 @@ export function setStyle(key: string, css: string) {
   styleElement.textContent = css
   updateMonacoTheme()
 }
+
 export function removeStyle(key: string) {
   const styleElement = document.getElementById(
     styleElementIdPrefix + key

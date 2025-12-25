@@ -67,7 +67,6 @@ const paths = {
   esbuildWasm: path.join(TAUT_DIR, 'core', 'main', 'deps', 'esbuild.wasm'),
   preloadJs: path.join(TAUT_DIR, 'core', 'preload', 'preload.js'),
   renderJs: path.join(TAUT_DIR, 'core', 'renderer', 'main.ts'),
-  depsCss: path.join(TAUT_DIR, 'core', 'renderer', 'deps', 'deps.bundle.css'),
 }
 
 // calculate a display path relative to ~ or %appdata%

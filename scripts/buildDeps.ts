@@ -1,5 +1,9 @@
 #!/usr/bin/env bun
 
+// Taut Build Script
+// Builds main process dependencies (esbuild-wasm) for Electron
+// Monaco and jsonc-parser are loaded from CDN at runtime
+
 import path from 'path'
 
 if (!('Bun' in globalThis)) {
@@ -9,6 +13,7 @@ if (!('Bun' in globalThis)) {
 
 console.log('[build] Starting build...')
 
+// Build main process dependencies (esbuild-wasm, resolve, electron-devtools-installer)
 console.log('[build-main] Bundling main dependencies...')
 const mainResult = await Bun.build({
   entrypoints: [path.join(import.meta.dir, '..', 'core', 'main', 'deps.ts')],

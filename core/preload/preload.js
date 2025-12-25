@@ -1,14 +1,11 @@
 // Taut Preload Script (The Bridge)
 // Injected into the renderer process as a custom preload script by main.cjs
-// Exposes TautBridge to the renderer and loads the original Slack preload
+// Implements TautBridge interface and loads the original Slack preload
 
 const { contextBridge, ipcRenderer } = require('electron')
-/** @import { TautPluginConfig } from '../Plugin' */
 /** @typedef { import('../main/helpers.cjs')['PATHS'] } PATHS */
 
 console.log('[Taut] Preload loaded')
-
-/** @typedef {typeof TautBridge} TautBridge */
 
 // user.css style element management
 const TAUT_USER_CSS_ID = 'taut-user-css-style'
@@ -48,16 +45,10 @@ function ensureUserCssStyle() {
  */
 function updateUserCss(css) {
   currentUserCss = css
-
-  // Wait for DOM to be ready
   if (document.readyState === 'loading') {
-    document.addEventListener(
-      'DOMContentLoaded',
-      () => {
-        ensureUserCssStyle()
-      },
-      { once: true }
-    )
+    document.addEventListener('DOMContentLoaded', () => ensureUserCssStyle(), {
+      once: true,
+    })
   } else {
     ensureUserCssStyle()
   }
@@ -72,99 +63,83 @@ ipcRenderer.on('taut:user-css-changed', (event, css) => {
 /** @type {PATHS | null} */
 let PATHS = null
 
-// Expose TautBridge to the renderer world
-const TautBridge = {
-  /**
-   * Ask the main process to start sending plugins and configs
-   * @returns {Promise<void>}
-   */
+/**
+ * Electron backend implementation of TautBridge
+ * Exposes IPC-based methods to the renderer world
+ * @type {import('../shared/TautBridge').TautBridge}
+ */
+const ElectronBackend = {
+  env: 'electron',
+
+  async start() {
+    PATHS = await ipcRenderer.invoke('taut:get-paths')
+  },
+
   startPlugins: () => ipcRenderer.invoke('taut:start-plugins'),
 
   /**
-   * Subscribe to config changes with a callback
-   * @param {(name: string, newConfig: TautPluginConfig) => void} callback - Callback to invoke on config changes
+   * Subscribe to plugin code delivery from main process
+   * @param {(name: string, code: string) => void} cb
+   * @returns {() => void}
    */
-  onConfigChange: (callback) => {
-    ipcRenderer.on(
-      'taut:config-changed',
-      /**
-       * @param {Electron.IpcRendererEvent} event
-       * @param {string} name - Plugin name
-       * @param {TautPluginConfig} newConfig - New plugin configuration
-       */
-      (event, name, newConfig) => {
-        callback(name, newConfig)
-      }
-    )
+  onPluginCode(cb) {
+    /**
+     * @param {Electron.IpcRendererEvent} _
+     * @param {string} name
+     * @param {string} code
+     */
+    const handler = (_, name, code) => cb(name, code)
+    ipcRenderer.on('taut:plugin-code', handler)
+    return () => ipcRenderer.removeListener('taut:plugin-code', handler)
   },
+
+  readConfigText: () => ipcRenderer.invoke('taut:read-config-text'),
+  writeConfigText: (text) => ipcRenderer.invoke('taut:write-config-text', text),
 
   /**
    * Subscribe to config text changes
-   * @param {(text: string) => void} callback
-   * @returns {() => void} Cleanup function
+   * @param {(text: string) => void} cb
+   * @returns {() => void}
    */
-  onConfigTextChange: (callback) => {
-    /** @type {(event: Electron.IpcRendererEvent, text: string) => void} */
-    const handler = (event, text) => callback(text)
+  onConfigTextChange(cb) {
+    /**
+     * @param {Electron.IpcRendererEvent} _
+     * @param {string} text
+     */
+    const handler = (_, text) => cb(text)
     ipcRenderer.on('taut:config-text-changed', handler)
     return () => ipcRenderer.removeListener('taut:config-text-changed', handler)
   },
 
+  readUserCss: () => ipcRenderer.invoke('taut:read-user-css'),
+  writeUserCss: (text) => ipcRenderer.invoke('taut:write-user-css', text),
+
   /**
    * Subscribe to user.css changes
-   * @param {(css: string) => void} callback
-   * @returns {() => void} Cleanup function
+   * @param {(css: string) => void} cb
+   * @returns {() => void}
    */
-  onUserCssChange: (callback) => {
-    /** @type {(event: Electron.IpcRendererEvent, css: string) => void} */
-    const handler = (event, css) => callback(css)
+  onUserCssChange(cb) {
+    /**
+     * @param {Electron.IpcRendererEvent} _
+     * @param {string} css
+     */
+    const handler = (_, css) => cb(css)
     ipcRenderer.on('taut:user-css-changed', handler)
     return () => ipcRenderer.removeListener('taut:user-css-changed', handler)
   },
 
-  /**
-   * Get paths to the config directory and files within it
-   * @type {() => (PATHS | null)} - The paths object
-   */
-  PATHS: () => PATHS,
+  // Electron: native fetch works (CORS bypassed via webRequest in patch.cjs)
+  fetch: (input, init) => fetch(input, init),
 
-  /**
-   * Set whether a plugin is enabled (persists to config file)
-   * @param {string} pluginName - The name of the plugin
-   * @param {boolean} enabled - Whether the plugin should be enabled
-   * @returns {Promise<boolean>} - True if successful
-   */
-  setPluginEnabled: (pluginName, enabled) =>
-    ipcRenderer.invoke('taut:set-plugin-enabled', pluginName, enabled),
-
-  /**
-   * Read config.jsonc as raw text
-   * @returns {Promise<string>} - The config file contents
-   */
-  readConfigText: () => ipcRenderer.invoke('taut:read-config-text'),
-
-  /**
-   * Write config.jsonc (raw text)
-   * @param {string} text - The new config contents
-   * @returns {Promise<boolean>} - True if successful
-   */
-  writeConfigText: (text) => ipcRenderer.invoke('taut:write-config-text', text),
-
-  /**
-   * Read user.css as raw text
-   * @returns {Promise<string>} - The user.css contents
-   */
-  readUserCss: () => ipcRenderer.invoke('taut:read-user-css'),
-
-  /**
-   * Write user.css (raw text)
-   * @param {string} text - The new CSS contents
-   * @returns {Promise<boolean>} - True if successful
-   */
-  writeUserCss: (text) => ipcRenderer.invoke('taut:write-user-css', text),
+  get PATHS() {
+    return PATHS
+  },
 }
-contextBridge.exposeInMainWorld('TautBridge', TautBridge)
 
+contextBridge.exposeInMainWorld('TautBridge', ElectronBackend)
+
+// Clear document and prepare for reconstruction
 document.open()
 document.write('')
 document.close()
@@ -175,6 +150,7 @@ const originalHtmlPromise = fetch(location.href).then((res) => res.text())
 /** @type {Promise<string>} */
 const rendererCodePromise = ipcRenderer.invoke('taut:get-renderer-code')
 
+// Load original preload, reconstruct document with CSP removed, inject renderer
 ;(async () => {
   try {
     const originalPreload = await originalPreloadPromise
@@ -207,11 +183,12 @@ const rendererCodePromise = ipcRenderer.invoke('taut:get-renderer-code')
       )
     )
   }
-  // inject renderer code at the start of <head>
+
+  // Inject renderer code at the start of <head>
   const head = parsedDocument.head
   const rendererCode = await rendererCodePromise
   const scriptEl = parsedDocument.createElement('script')
-  scriptEl.textContent = `// Taut injected renderer code\nBuilt from core/renderer/main.ts\n${rendererCode}`
+  scriptEl.textContent = `// Taut injected renderer code\n// Built from core/renderer/main.ts\n${rendererCode}`
   head.insertBefore(scriptEl, head.firstChild)
 
   const html = parsedDocument.documentElement.outerHTML
@@ -221,14 +198,4 @@ const rendererCodePromise = ipcRenderer.invoke('taut:get-renderer-code')
   document.close()
 
   console.log('[Taut] CSP Meta Tag removed and document reconstructed.')
-})()
-
-// Fetch the PATHS from main process
-;(async () => {
-  try {
-    const paths = await ipcRenderer.invoke('taut:get-paths')
-    PATHS = paths
-  } catch (err) {
-    console.error('[Taut] Failed to get PATHS from main process:', err)
-  }
 })()

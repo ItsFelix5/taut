@@ -2,11 +2,14 @@
 // Abstract class and types that all Taut plugins must extend
 // Defines the TautAPI interface available to plugins
 
-import type { TautPluginConfig } from './main/plugins.cjs'
-export type { TautPluginConfig } from './main/plugins.cjs'
-import type { TautAPI } from './renderer/client'
-export type { TautAPI } from './renderer/client'
+import type { TautAPI } from './renderer/pluginManager'
+export type { TautAPI } from './renderer/pluginManager'
 export type { ComponentType, componentReplacer } from './renderer/react'
+
+export interface TautPluginConfig {
+  enabled: boolean
+  [key: string]: unknown
+}
 
 /**
  * Abstract base class that all Taut plugins must extend.

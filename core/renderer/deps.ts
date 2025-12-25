@@ -3,6 +3,7 @@
 // Provides Monaco editor with blob-based workers to comply with Slack's CSP
 
 import * as monaco from 'monaco-editor'
+import * as jsonc from 'jsonc-parser'
 
 const global = globalThis as any
 
@@ -60,6 +61,7 @@ const rgbCsvToHex = (rgb: string) => {
 }
 
 const updateMonacoTheme = () => {
+  if (!document.body) return
   try {
     const bodyStyle = window.getComputedStyle(document.body)
     const colorScheme = bodyStyle.colorScheme
@@ -81,16 +83,24 @@ const updateMonacoTheme = () => {
   }
 }
 
-updateMonacoTheme()
 monaco.editor.setTheme('taut')
 
-const observer = new MutationObserver(updateMonacoTheme)
-observer.observe(document.body, {
-  attributes: true,
-  attributeFilter: ['class', 'style'],
-})
+const initTheme = () => {
+  updateMonacoTheme()
+  const observer = new MutationObserver(updateMonacoTheme)
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class', 'style'],
+  })
+}
+
+if (document.body) {
+  initTheme()
+} else {
+  document.addEventListener('DOMContentLoaded', initTheme)
+}
 
 global.monaco = monaco
 global.updateMonacoTheme = updateMonacoTheme
 
-export { monaco, updateMonacoTheme }
+export { monaco, updateMonacoTheme, jsonc }

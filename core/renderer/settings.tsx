@@ -2,9 +2,9 @@
 // Adds a "Taut" tab to Slack's Preferences dialog
 // Shows installed plugins, config info, and credits
 
+import type { ConfigStore } from '../shared/ConfigStore'
 import { findComponent, patchComponent } from './react'
-import { TautBridge } from './helpers'
-import type { PluginInfo, PluginManager } from './client'
+import type { PluginInfo, PluginManager } from './pluginManager'
 
 // @ts-ignore
 import * as deps from './deps/deps.bundle.js'
@@ -28,7 +28,10 @@ const Button = findComponent<
     Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, keyof ButtonProps>
 >('Button')
 
-export function addSettingsTab(pluginManager: PluginManager) {
+export function addSettingsTab(
+  pluginManager: PluginManager,
+  configStore: ConfigStore
+) {
   patchComponent<{
     tabs: {
       'label': React.ReactElement
@@ -50,7 +53,12 @@ export function addSettingsTab(pluginManager: PluginManager) {
       tabs.push({
         'id': 'taut',
         'label': <>Taut</>,
-        'content': <TautSettings pluginManager={pluginManager} />,
+        'content': (
+          <TautSettings
+            pluginManager={pluginManager}
+            configStore={configStore}
+          />
+        ),
         'svgIcon': { name: 'code' },
         'aria-label': 'taut',
       })
@@ -59,12 +67,9 @@ export function addSettingsTab(pluginManager: PluginManager) {
     const handleTabChange = (id: string, e: React.UIEvent) => {
       if (id === 'taut') {
         setIsTautSelected(true)
-        // Some of the tabs have special behavior (e.g. "Appearance" removes dark overlay behind modal)
-        // so pretend Taut is a tab with no special behavior
         if (props.onTabChange) props.onTabChange('advanced', e)
       } else {
         setIsTautSelected(false)
-        // Pass original events back to the app
         if (props.onTabChange) props.onTabChange(id, e)
       }
     }
@@ -82,8 +87,16 @@ export function addSettingsTab(pluginManager: PluginManager) {
   })
 }
 
-function TautSettings({ pluginManager }: { pluginManager: PluginManager }) {
-  const configDir = TautBridge.PATHS()?.display.tautDir || '?'
+function TautSettings({
+  pluginManager,
+  configStore,
+}: {
+  pluginManager: PluginManager
+  configStore: ConfigStore
+}) {
+  const bridge = window.TautBridge
+  const paths = bridge.PATHS
+  const isUserscript = bridge.env === 'userscript'
 
   return (
     <div>
@@ -96,17 +109,21 @@ function TautSettings({ pluginManager }: { pluginManager: PluginManager }) {
         Taut Settings
       </div>
       <MrkdwnElement text="<#C0A057686SF> | <https://github.com/jeremy46231/taut|Repository>" />
-      <MrkdwnElement text={`Config Directory: \`${configDir}\``} />
+      {!isUserscript && paths && (
+        <MrkdwnElement
+          text={`Config Directory: \`${paths.display.tautDir}\``}
+        />
+      )}
       <hr />
-      <PluginList pluginManager={pluginManager} />
+      <PluginList pluginManager={pluginManager} configStore={configStore} />
       <hr />
       <div style={{ marginTop: '16px' }}>
         <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
           Edit Configuration
         </div>
-        <ConfigEditor />
+        <ConfigEditor configStore={configStore} />
         <div style={{ height: '24px' }} />
-        <UserCssEditor />
+        <UserCssEditor configStore={configStore} />
       </div>
       <hr />
       <MrkdwnElement text="Created by <@U06UYA5GMB5>, <https://github.com/jeremy46231/taut#credits|credits>" />
@@ -114,21 +131,20 @@ function TautSettings({ pluginManager }: { pluginManager: PluginManager }) {
   )
 }
 
-function ConfigEditor() {
+function ConfigEditor({ configStore }: { configStore: ConfigStore }) {
   const [text, setText] = React.useState<string>('')
   const [dirty, setDirty] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
+  const bridge = window.TautBridge
+  const paths = bridge.PATHS
+  const isUserscript = bridge.env === 'userscript'
 
-  // Load initial content
   React.useEffect(() => {
-    ;(async () => {
-      setText(await TautBridge.readConfigText())
-    })()
+    setText(configStore.getConfigText())
   }, [])
 
-  // Listen for external changes
   React.useEffect(() => {
-    return TautBridge.onConfigTextChange((newText) => {
+    return configStore.onConfigTextChange((newText) => {
       if (!dirty) {
         setText(newText)
       }
@@ -137,16 +153,19 @@ function ConfigEditor() {
 
   const handleSave = async () => {
     setSaving(true)
-    const ok = await TautBridge.writeConfigText(text)
-    if (ok) setDirty(false)
+    await configStore.updateConfigText(text)
+    setDirty(false)
     setSaving(false)
   }
 
   return (
     <div>
-      <MrkdwnElement
-        text={`Editing \`${TautBridge.PATHS()?.display.config || '?'}\``}
-      />
+      {!isUserscript && paths && (
+        <MrkdwnElement text={`Editing \`${paths.display.config}\``} />
+      )}
+      {isUserscript && (
+        <MrkdwnElement text="Editing config (stored in userscript storage)" />
+      )}
       <MonacoEditor
         language="json"
         value={text}
@@ -175,21 +194,20 @@ function ConfigEditor() {
   )
 }
 
-function UserCssEditor() {
+function UserCssEditor({ configStore }: { configStore: ConfigStore }) {
   const [text, setText] = React.useState<string>('')
   const [dirty, setDirty] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
+  const bridge = window.TautBridge
+  const paths = bridge.PATHS
+  const isUserscript = bridge.env === 'userscript'
 
-  // Load initial content
   React.useEffect(() => {
-    ;(async () => {
-      setText(await TautBridge.readUserCss())
-    })()
+    setText(configStore.getUserCssText())
   }, [])
 
-  // Listen for external changes
   React.useEffect(() => {
-    return TautBridge.onUserCssChange((newText) => {
+    return configStore.onUserCssChange((newText) => {
       if (!dirty) {
         setText(newText)
       }
@@ -198,16 +216,19 @@ function UserCssEditor() {
 
   const handleSave = async () => {
     setSaving(true)
-    const ok = await TautBridge.writeUserCss(text)
-    if (ok) setDirty(false)
+    await configStore.updateUserCssText(text)
+    setDirty(false)
     setSaving(false)
   }
 
   return (
     <div>
-      <MrkdwnElement
-        text={`Editing \`${TautBridge.PATHS()?.display.userCss || '?'}\``}
-      />
+      {!isUserscript && paths && (
+        <MrkdwnElement text={`Editing \`${paths.display.userCss}\``} />
+      )}
+      {isUserscript && (
+        <MrkdwnElement text="Editing user.css (stored in userscript storage)" />
+      )}
       <MonacoEditor
         language="css"
         value={text}
@@ -251,14 +272,11 @@ function MonacoEditor({
   Omit<React.HTMLAttributes<HTMLDivElement>, keyof EditorProps>) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const editorRef = React.useRef<MonacoEditorInstance | null>(null)
-  const valueRef = React.useRef(value)
+  /** if the editor is currently updating its value externally, so don't fire onChange */
+  const isUpdatingRef = React.useRef(false)
 
   React.useEffect(() => {
-    valueRef.current = value
-  }, [value])
-
-  React.useEffect(() => {
-    if (!monaco || !containerRef.current) return
+    if (!containerRef.current) return
 
     const editor = monaco.editor.create(containerRef.current, {
       value,
@@ -267,17 +285,15 @@ function MonacoEditor({
       theme: 'taut',
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
-      wordWrap: 'on',
       lineNumbers: 'on',
-      fontSize: 13,
       tabSize: 2,
     })
 
     editorRef.current = editor
 
     const sub = editor.onDidChangeModelContent(() => {
+      if (isUpdatingRef.current) return
       const text = editor.getValue()
-      valueRef.current = text
       onChange(text)
     })
 
@@ -293,15 +309,23 @@ function MonacoEditor({
     if (!editor) return
     if (editor.getValue() !== value) {
       const position = editor.getPosition()
+      isUpdatingRef.current = true
       editor.setValue(value)
       if (position) editor.setPosition(position)
+      isUpdatingRef.current = false
     }
   }, [value])
 
   return <div ref={containerRef} {...props} />
 }
 
-function PluginList({ pluginManager }: { pluginManager: PluginManager }) {
+function PluginList({
+  pluginManager,
+  configStore,
+}: {
+  pluginManager: PluginManager
+  configStore: ConfigStore
+}) {
   const [pluginInfo, setPluginInfo] = React.useState(() =>
     pluginManager.getPluginInfo()
   )
@@ -349,14 +373,13 @@ function PluginList({ pluginManager }: { pluginManager: PluginManager }) {
 
   const handleToggle = async (id: string, enabled: boolean) => {
     setTogglingPlugins((prev) => new Set(prev).add(id))
-    TautBridge.setPluginEnabled(id, enabled)
+    await configStore.setPluginEnabled(id, enabled)
 
     const existingTimeout = timeoutsRef.current.get(id)
     if (existingTimeout) {
       clearTimeout(existingTimeout)
     }
 
-    // Timeout to prevent stuck toggles
     const timeout = setTimeout(() => {
       setTogglingPlugins((prev) => {
         const next = new Set(prev)
@@ -381,7 +404,6 @@ function PluginList({ pluginManager }: { pluginManager: PluginManager }) {
             <label style={{ display: 'flex', alignItems: 'start' }}>
               <input
                 type="checkbox"
-                // if currently toggling, it's going to be the inverse value, show that
                 checked={
                   !togglingPlugins.has(info.id) ? info.enabled : !info.enabled
                 }

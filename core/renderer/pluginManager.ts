@@ -6,13 +6,15 @@ import { findExport, findByProps, commonModules } from './webpack'
 import { findComponent, patchComponent } from './react'
 import { addSettingsTab } from './settings'
 import { setStyle, removeStyle } from './css'
-import { TautBridge, TypedEventTarget } from './helpers'
+import { TypedEventTarget } from './helpers'
 
 import {
   TautPlugin,
   type TautPluginConstructor,
   type TautPluginConfig,
 } from '../Plugin'
+import type { TautBridge } from '../shared/TautBridge'
+import type { ConfigStore } from '../shared/ConfigStore'
 
 const global = globalThis as any
 global.TautPlugin = TautPlugin
@@ -25,13 +27,12 @@ export const TautAPI = {
   findComponent,
   patchComponent,
   commonModules,
+  fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+    window.TautBridge.fetch(input, init),
 }
 export type TautAPI = typeof TautAPI
 global.TautAPI = TautAPI
 
-/**
- * Plugin Manager - loads and manages Taut plugins
- */
 export class PluginManager extends TypedEventTarget<{
   pluginInfoChanged: PluginInfo
 }> {
@@ -40,74 +41,74 @@ export class PluginManager extends TypedEventTarget<{
     {
       PluginClass: TautPluginConstructor
       instance: TautPlugin | null
-      config: TautPluginConfig
     }
   >()
 
-  /**
-   * Initialize the plugin manager - load and start all plugins
-   */
-  async init() {
-    console.log('[Taut] PluginManager initializing...')
+  constructor(
+    protected bridge: TautBridge,
+    protected configStore: ConfigStore
+  ) {
+    super()
 
-    TautBridge.onConfigChange((name, newConfig) => {
-      this.updatePluginConfig(name, newConfig)
+    this.bridge.onPluginCode((name, code) => {
+      this.loadPluginCode(name, code)
     })
-    await TautBridge.startPlugins()
+
+    this.configStore.onConfigChange((newConfig) => {
+      for (const [name, pluginConfig] of Object.entries(newConfig.plugins)) {
+        this.updatePluginConfig(name, pluginConfig)
+      }
+    })
   }
 
-  /**
-   * Load a plugin
-   * Called by code injected by the main process
-   * @param name - Plugin name
-   * @param PluginClass - Plugin class (constructor)
-   * @param config - Plugin configuration
-   */
-  loadPlugin(
-    name: string,
-    PluginClass: TautPluginConstructor,
-    config: TautPluginConfig
-  ) {
+  loadPluginCode(name: string, code: string): boolean {
     console.log(`[Taut] Loading plugin: ${name}`)
 
-    if (
-      typeof PluginClass !== 'function' ||
-      !(PluginClass.prototype instanceof TautPlugin)
-    ) {
-      console.error(`[Taut] Plugin class ${name} does not extend TautPlugin`)
-      return
-    }
+    try {
+      const config = this.configStore.getConfig().plugins[name]
 
-    const existing = this.plugins.get(name)
-    if (existing && existing.instance) {
-      try {
-        existing.instance.stop()
-      } catch (err) {
-        console.error(`[Taut] Error stopping existing plugin ${name}:`, err)
+      const PluginClass = new Function(
+        `return (${code}).default`
+      )() as TautPluginConstructor
+
+      if (
+        typeof PluginClass !== 'function' ||
+        !(PluginClass.prototype instanceof TautPlugin)
+      ) {
+        throw new Error(`Plugin class ${name} does not extend TautPlugin`)
       }
-    }
 
-    let instance: TautPlugin | null = null
-
-    if (config.enabled) {
-      try {
-        instance = new PluginClass(TautAPI, config)
-        instance.start()
-        console.log(`[Taut] Plugin ${name} started successfully`)
-      } catch (err) {
-        console.error(`[Taut] Error starting plugin ${name}:`, err)
+      const existing = this.plugins.get(name)
+      if (existing && existing.instance) {
+        try {
+          existing.instance.stop()
+        } catch (err) {
+          console.error(`[Taut] Error stopping existing plugin ${name}:`, err)
+        }
       }
-    }
 
-    this.plugins.set(name, { PluginClass, instance, config })
-    this.emit('pluginInfoChanged', this.getPluginInfo())
+      let instance: TautPlugin | null = null
+
+      if (config.enabled) {
+        try {
+          instance = new PluginClass(TautAPI, config)
+          instance.start()
+          console.log(`[Taut] Plugin ${name} started successfully`)
+        } catch (err) {
+          console.error(`[Taut] Error starting plugin ${name}:`, err)
+        }
+      }
+
+      this.plugins.set(name, { PluginClass, instance })
+      this.emit('pluginInfoChanged', this.getPluginInfo())
+      console.log(`[Taut] Plugin ${name} loaded`)
+      return true
+    } catch (err) {
+      console.error(`[Taut] Plugin ${name} failed to load:`, err)
+      return false
+    }
   }
 
-  /**
-   * Update a plugin's config and start/restart/stop as needed
-   * @param name - Plugin name
-   * @param newConfig - New plugin configuration
-   */
   updatePluginConfig(name: string, newConfig: TautPluginConfig) {
     console.log(`[Taut] Updating config for plugin: ${name}`)
 
@@ -146,7 +147,6 @@ export class PluginManager extends TypedEventTarget<{
     this.plugins.set(name, {
       PluginClass: existing.PluginClass,
       instance,
-      config: newConfig,
     })
 
     this.emit('pluginInfoChanged', this.getPluginInfo())
@@ -159,18 +159,8 @@ export class PluginManager extends TypedEventTarget<{
       name: plugin.PluginClass.pluginName,
       description: plugin.PluginClass.description,
       authors: plugin.PluginClass.authors,
-      enabled: plugin.config.enabled,
+      enabled: plugin.instance !== null,
     }))
   }
 }
 export type PluginInfo = ReturnType<PluginManager['getPluginInfo']>
-
-export function initialize() {
-  // Create and initialize the plugin manager
-  const pluginManager = new PluginManager()
-  global.__tautPluginManager = pluginManager
-  pluginManager.init()
-
-  // Add Taut settings tab
-  addSettingsTab(pluginManager)
-}

@@ -1,21 +1,16 @@
 // Taut Plugin Manager
 // Handles plugin discovery, bundling, config watching, and hot-reloading
-// Communicates with the renderer process via IPC
+// Sends plugin code to renderer via IPC for evaluation
 
 const { promises: fs, watchFile, watch } = require('fs')
 const path = require('path')
 const electron = require('electron')
 
-const {
-  PATHS,
-  deepEqual,
-  fileExists,
-  esbuildInitialized,
-} = require('./helpers.cjs')
+const { PATHS, fileExists, esbuildInitialized } = require('./helpers.cjs')
 
 /** @type {typeof import('./deps')} */
 const deps = require('./deps/deps.bundle.js')
-const { bundle, parseJSONC, modifyJSONC } = deps
+const { bundle } = deps
 
 const { BROWSER } = require('./patch.cjs')
 
@@ -32,53 +27,23 @@ const PLUGIN_EXTENSIONS = [
 ]
 
 /**
- * @typedef {{ enabled: boolean } & Record<string, unknown>} TautPluginConfig
- */
-/**
- * @typedef {Object} TautConfig
- * @property {Record<string, TautPluginConfig | undefined>} plugins
- */
-
-/** @type {TautConfig} */
-let config = { plugins: {} }
-
-/**
- * Read the config file, or return default config if it doesn't exist
- * @returns {Promise<TautConfig>}
- */
-async function readConfig() {
-  try {
-    if (await fileExists(PATHS.config)) {
-      const contents = await fs.readFile(PATHS.config, 'utf8')
-      return parseJSONC(contents)
-    }
-  } catch (err) {
-    console.error('[Taut] Failed to read config:', err)
-  }
-  return { plugins: {} }
-}
-
-/**
- * Bundle a plugin file and send it to the renderer process
+ * Bundle a plugin file and send it to the renderer process via IPC
  * @param {string} filePath - Absolute path to the plugin file
  * @returns {Promise<void>}
  */
 async function bundleAndSendPlugin(filePath) {
   const name = getPluginName(filePath)
-  const pluginConfig = config.plugins[name] || { enabled: false }
 
   try {
     await esbuildInitialized
     const iife = await bundle(filePath, true)
 
-    const code = `globalThis.__tautPluginManager.loadPlugin(${JSON.stringify(
-      name
-    )}, ${iife}.default, ${JSON.stringify(pluginConfig)})`
     if (!BROWSER.current) {
       throw new Error('Browser window not initialized')
     }
-    await BROWSER.current.webContents.executeJavaScript(code)
-    console.log(`[Taut] Plugin ${name} sent successfully`)
+
+    BROWSER.current.webContents.send('taut:plugin-code', name, iife)
+    console.log(`[Taut] Plugin ${name} sent via IPC`)
   } catch (err) {
     console.error(`[Taut] Failed to bundle plugin ${name}:`, err)
   }
@@ -103,43 +68,14 @@ function watchConfig() {
     console.log('[Taut] Config file changed')
 
     // Read raw content for the editor
-    let rawConfig = ''
     try {
-      rawConfig = await fs.readFile(PATHS.config, 'utf8')
+      const rawConfig = await fs.readFile(PATHS.config, 'utf8')
       if (BROWSER.current) {
         BROWSER.current.webContents.send('taut:config-text-changed', rawConfig)
       }
     } catch (err) {
       console.error('[Taut] Failed to read config text:', err)
     }
-
-    const newConfig = parseJSONC(rawConfig) || { plugins: {} }
-    const oldPluginConfigs = config.plugins || {}
-    const newPluginConfigs = newConfig.plugins || {}
-
-    // Check each plugin to see if its config changed
-    const allPluginNames = new Set([
-      ...Object.keys(oldPluginConfigs),
-      ...Object.keys(newPluginConfigs),
-    ])
-
-    for (const name of allPluginNames) {
-      const oldPluginConfig = oldPluginConfigs[name] || { enabled: false }
-      const newPluginConfig = newPluginConfigs[name] || { enabled: false }
-
-      if (!deepEqual(oldPluginConfig, newPluginConfig)) {
-        console.log(`[Taut] Config changed for plugin: ${name}`)
-        if (BROWSER.current) {
-          BROWSER.current.webContents.send(
-            'taut:config-changed',
-            name,
-            newPluginConfig
-          )
-        }
-      }
-    }
-
-    config = newConfig
   })
 }
 
@@ -214,15 +150,15 @@ async function watchPluginDir(dir) {
 async function getPluginMap() {
   const pluginMap = new Map()
 
-  // Helper to process a directory
   /**
+   * Helper to process a directory
    * @param {string} dir
    */
   const processDir = async (dir) => {
     if (!(await fileExists(dir))) return
 
     const files = await fs.readdir(dir)
-    const pluginsInDir = new Map() // name -> { extIndex, path }
+    const pluginsInDir = new Map()
 
     for (const file of files) {
       const ext = path.extname(file)
@@ -311,9 +247,6 @@ function getPluginName(filePath) {
 electron.ipcMain.handle('taut:start-plugins', async () => {
   console.log('[Taut] Starting plugins')
   try {
-    // Read and store config
-    config = await readConfig()
-
     // Generate initial plugin map
     currentPluginMap = await getPluginMap()
     const pluginFiles = [...currentPluginMap.values()]
@@ -348,37 +281,6 @@ electron.ipcMain.handle('taut:start-plugins', async () => {
 electron.ipcMain.handle('taut:get-paths', async () => {
   return PATHS
 })
-
-// IPC Handler: Set plugin enabled state (targeted edit preserving comments)
-electron.ipcMain.handle(
-  'taut:set-plugin-enabled',
-  /**
-   * @param {Electron.IpcMainInvokeEvent} _event
-   * @param {string} pluginName
-   * @param {boolean} enabled
-   * @returns {Promise<boolean>} - True if successful
-   */
-  async (_event, pluginName, enabled) => {
-    console.log(`[Taut] Setting plugin ${pluginName} enabled: ${enabled}`)
-    try {
-      const configText = await fs.readFile(PATHS.config, 'utf8')
-      const newConfigText = modifyJSONC(
-        configText,
-        ['plugins', pluginName, 'enabled'],
-        enabled
-      )
-      await fs.writeFile(PATHS.config, newConfigText, 'utf8')
-      console.log(`[Taut] Successfully updated config for plugin ${pluginName}`)
-      return true
-    } catch (err) {
-      console.error(
-        `[Taut] Failed to update config for plugin ${pluginName}:`,
-        err
-      )
-      return false
-    }
-  }
-)
 
 // IPC Handler: Read config.jsonc as raw text
 electron.ipcMain.handle('taut:read-config-text', async () => {

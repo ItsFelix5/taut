@@ -1,16 +1,5 @@
 // Taut Renderer Helpers
 // Shared utilities for the renderer process
-// Re-exports TautBridge and provides TypedEventTarget for type-safe events
-
-import type { TautBridge } from '../preload/preload'
-
-const global = window as any
-
-const TautBridge: TautBridge = global.TautBridge
-if (!TautBridge) {
-  throw new Error('[Taut] TautBridge is not available in the renderer context')
-}
-export { TautBridge }
 
 export class TypedEventTarget<
   TEvents extends Record<string, unknown>,
