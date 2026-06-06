@@ -22,7 +22,7 @@ import type { ConfigStore } from './configStore'
 const global = globalThis as any
 global.TautPlugin = TautPlugin
 
-export const tautAPIPromise = (async () => {
+async function makeTautAPI(bridge: TautBridge) {
   const TautAPI = {
     setStyle,
     removeStyle,
@@ -30,8 +30,7 @@ export const tautAPIPromise = (async () => {
     findByProps: await findByPropsPromise,
     findComponent: await findComponentPromise,
     patchComponent: await patchComponentPromise,
-    fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-      (global.TautBridge as TautBridge).fetch(input, init),
+    fetch: bridge.fetch.bind(bridge),
     commonModules: {
       react: await reactPromise,
     },
@@ -39,12 +38,13 @@ export const tautAPIPromise = (async () => {
   global.TautAPI = TautAPI
   console.log('[Taut] TautAPI initialized', TautAPI)
   return TautAPI
-})()
-export type TautAPI = Awaited<typeof tautAPIPromise>
+}
+export type TautAPI = Awaited<ReturnType<typeof makeTautAPI>>
 
 export class PluginManager extends TypedEventTarget<{
   pluginInfoChanged: PluginInfo
 }> {
+  readonly tautAPIPromise: Promise<TautAPI>
   plugins = new Map<
     string,
     {
@@ -59,6 +59,7 @@ export class PluginManager extends TypedEventTarget<{
     protected configStore: ConfigStore
   ) {
     super()
+    this.tautAPIPromise = makeTautAPI(bridge)
 
     this.bridge.onPluginCode(async (name, code) => {
       await this.loadPluginCode(name, code)
@@ -110,7 +111,7 @@ export class PluginManager extends TypedEventTarget<{
         await reactPromise
 
         try {
-          instance = new PluginClass(await tautAPIPromise, config)
+          instance = new PluginClass(await this.tautAPIPromise, config)
           instance.start()
           console.log(`[Taut] Plugin ${name} started successfully`)
         } catch (err) {
@@ -154,7 +155,7 @@ export class PluginManager extends TypedEventTarget<{
       await reactPromise
 
       try {
-        instance = new existing.PluginClass(await tautAPIPromise, newConfig)
+        instance = new existing.PluginClass(await this.tautAPIPromise, newConfig)
         instance.start()
         console.log(
           `[Taut] Plugin ${name} started successfully with new config`
