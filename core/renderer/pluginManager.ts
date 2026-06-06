@@ -155,7 +155,10 @@ export class PluginManager extends TypedEventTarget<{
       await reactPromise
 
       try {
-        instance = new existing.PluginClass(await this.tautAPIPromise, newConfig)
+        instance = new existing.PluginClass(
+          await this.tautAPIPromise,
+          newConfig
+        )
         instance.start()
         console.log(
           `[Taut] Plugin ${name} started successfully with new config`
