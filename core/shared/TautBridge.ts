@@ -111,13 +111,6 @@ export interface TautBridge {
   onUserCssChange(cb: (css: string) => void): Unsubscribe
 
   /**
-   * CORS-bypassing fetch with same API as native fetch
-   * Electron: uses native fetch (CORS bypassed via webRequest)
-   * Userscript: uses GM_xmlhttpRequest under the hood
-   */
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
-
-  /**
    * Paths to Taut directories and files
    * TautPaths object, or null in userscript mode
    */

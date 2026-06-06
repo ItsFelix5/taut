@@ -37,8 +37,6 @@ export const tautAPIPromise = (async () => {
       reactDOM: await reactDOMPromise,
       reactDOMClient: await reactDOMClientPromise,
     },
-    fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-      window.TautBridge.fetch(input, init),
   }
   global.TautAPI = TautAPI
   console.log('[Taut] TautAPI initialized', TautAPI)

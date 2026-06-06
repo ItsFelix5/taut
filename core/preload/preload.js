@@ -129,9 +129,6 @@ const ElectronBackend = {
     return () => ipcRenderer.removeListener('taut:user-css-changed', handler)
   },
 
-  // Electron: native fetch works (CORS bypassed via webRequest in patch.cjs)
-  fetch: (input, init) => fetch(input, init),
-
   get PATHS() {
     return PATHS
   },

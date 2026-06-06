@@ -99,9 +99,6 @@ export const UserscriptBackend: TautBridge = {
     return () => userCssCallbacks.delete(cb)
   },
 
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    return globalThis.fetch(input, init)
-  },
 }
 
 const pluginCodeCallbacks = new Set<PluginCodeCallback>()

@@ -143,7 +143,4 @@ export const extensionBridge: TautBridge = {
     return () => userCssCallbacks.delete(cb)
   },
 
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    return globalThis.fetch(input, init)
-  },
 }

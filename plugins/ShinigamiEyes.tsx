@@ -356,7 +356,7 @@ export default class ShinigamiEyes extends TautPlugin {
           WHERE id BETWEEN ${start} AND ${end}
         `
 
-        const response = await this.api.fetch(API_URL, {
+        const response = await fetch(API_URL, {
           method: 'POST',
           headers: {
             'authorization': `Bearer ${apiToken}`,
@@ -427,7 +427,7 @@ export default class ShinigamiEyes extends TautPlugin {
     try {
       const userQuery = `SELECT id FROM users WHERE slack_uid = '${slackId}' LIMIT 1`
 
-      const userResponse = await this.api.fetch(API_URL, {
+      const userResponse = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'authorization': `Bearer ${apiToken}`,
@@ -464,7 +464,7 @@ export default class ShinigamiEyes extends TautPlugin {
         LIMIT 5
       `
 
-      const logsResponse = await this.api.fetch(API_URL, {
+      const logsResponse = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'authorization': `Bearer ${apiToken}`,
