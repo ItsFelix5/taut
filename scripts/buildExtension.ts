@@ -3,6 +3,7 @@
 // manifest version. Run build:taut first (the build:extension script does this).
 
 import path from 'path'
+import prettier from 'prettier'
 
 if (!('Bun' in globalThis)) {
   console.error('This script must be run with Bun.')
@@ -30,7 +31,11 @@ for (const browser of ['chrome', 'firefox']) {
   const manifestPath = path.join(ROOT, 'extension', browser, 'manifest.json')
   const manifest = await Bun.file(manifestPath).json()
   manifest.version = version
-  await Bun.write(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+  const formatted = await prettier.format(JSON.stringify(manifest), {
+    ...(await prettier.resolveConfig(manifestPath)),
+    filepath: manifestPath,
+  })
+  await Bun.write(manifestPath, formatted)
 }
 
 console.log(`[build-extension] Set manifest version to ${version}`)
