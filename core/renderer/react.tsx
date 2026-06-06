@@ -1,12 +1,19 @@
 // Taut React Utilities
 // Provides utilities for finding and patching React components
-// Implements component patching via React.createElement proxy
 
-import { findExportPromise, waitForExport } from './webpack'
+import { findExportPromise, waitForExport, forEachExport } from './webpack'
 
 const global = globalThis as any
 
-// React Promise - waits for React, patches createElement, then resolves
+declare global {
+  namespace React {
+    interface Attributes {
+      __original?: true
+    }
+  }
+}
+
+// React Detection
 
 function isReact(exp: any): exp is typeof import('react') {
   return (
@@ -17,96 +24,6 @@ function isReact(exp: any): exp is typeof import('react') {
     'useState' in exp
   )
 }
-export const reactPromise: Promise<typeof import('react')> = (async () => {
-  const React = await waitForExport(isReact)
-
-  // Proxy React.createElement to intercept component creation
-  React.createElement = new Proxy(React.createElement, {
-    apply(
-      target: typeof React.createElement,
-      thisArg: any,
-      [component, props, ...children]: [
-        component: ComponentType | originalComponentObject,
-        props: any,
-        ...children: any[],
-      ]
-    ) {
-      const __original = props && props['__original']
-      if (__original) {
-        delete props['__original']
-      }
-
-      if (isOriginalComponentObject(component)) {
-        const originalComponent = component['originalComponent']
-        return Reflect.apply(target, thisArg, [
-          originalComponent,
-          props,
-          ...children,
-        ])
-      }
-
-      if (!__original) {
-        // Memoize the resolved component per component identity
-        // so we only run matchers once per type
-        const cacheable =
-          typeof component === 'object' || typeof component === 'function'
-
-        if (cacheable && notPatchedCache.has(component)) {
-          // Known to match no replacers; fall through to the default return.
-        } else if (cacheable && resolvedComponentCache.has(component)) {
-          return Reflect.apply(target, thisArg, [
-            resolvedComponentCache.get(component),
-            props,
-            ...children,
-          ])
-        } else {
-          const componentReplacers = [
-            ...componentReplacements
-              .entries()
-              .filter(([matcher, _]) => matcher(component))
-              .map(([_, replacer]) => replacer),
-          ]
-          if (componentReplacers.length > 0) {
-            const originalComponent = getOriginalComponentObject(
-              component
-            ) as unknown as ComponentType
-
-            const replacedComponent = componentReplacers.reduce(
-              (currentComponent, replacer) =>
-                applyReplacerWithCache(replacer, currentComponent),
-              originalComponent
-            )
-            if (cacheable) {
-              resolvedComponentCache.set(component, replacedComponent)
-            }
-            return Reflect.apply(target, thisArg, [
-              replacedComponent,
-              props,
-              ...children,
-            ])
-          } else if (cacheable) {
-            notPatchedCache.add(component)
-          }
-        }
-      }
-
-      return Reflect.apply(target, thisArg, [component, props, ...children])
-    },
-  })
-
-  global.React = React
-  return React
-})()
-
-declare global {
-  namespace React {
-    interface Attributes {
-      __original?: true
-    }
-  }
-}
-
-// ReactDOM Promises
 
 function isReactDOM(exp: any): exp is typeof import('react-dom') {
   return (
@@ -122,6 +39,18 @@ function isReactDOMClient(exp: any): exp is typeof import('react-dom/client') {
     'hydrateRoot' in exp
   )
 }
+
+function isJsxRuntime(exp: any): boolean {
+  return !!(
+    exp &&
+    typeof exp === 'object' &&
+    exp.jsx &&
+    exp.jsxs &&
+    exp.Fragment
+  )
+}
+
+// ReactDOM Promises
 
 export const reactDOMPromise: Promise<typeof import('react-dom')> =
   (async () => {
@@ -363,6 +292,49 @@ function applyReplacerWithCache<P = any>(
   return replaced
 }
 
+// Shared component resolution
+//
+// Given the `type`/`component` argument passed to createElement or jsx/jsxs,
+// return the type that should actually be rendered: either the original
+// component (when no replacers match, or when explicitly opting out via
+// `__original`), or the replacer-transformed component. Results are memoized
+// per component identity so matchers run at most once per type.
+function resolveType(type: any, props: any): any {
+  // `__original` opts a single render out of patching. Consume the prop and
+  // render the underlying component unchanged.
+  const __original = props?.['__original']
+  if (__original) {
+    delete props['__original']
+    return type
+  }
+
+  // Already an unwrapped original-component marker: render the wrapped target
+  if (isOriginalComponentObject(type)) return type.originalComponent
+
+  const cacheable = typeof type === 'object' || typeof type === 'function'
+  if (cacheable && notPatchedCache.has(type)) return type
+  if (cacheable && resolvedComponentCache.has(type)) {
+    return resolvedComponentCache.get(type)
+  }
+
+  const replacers = [...componentReplacements.entries()]
+    .filter(([matcher]) => matcher(type))
+    .map(([, replacer]) => replacer)
+
+  if (replacers.length > 0) {
+    const oc = getOriginalComponentObject(type) as unknown as ComponentType
+    const replaced = replacers.reduce(
+      (current, replacer) => applyReplacerWithCache(replacer, current),
+      oc
+    )
+    if (cacheable) resolvedComponentCache.set(type, replaced)
+    return replaced
+  }
+
+  if (cacheable) notPatchedCache.add(type)
+  return type
+}
+
 function patchComponent<P = {}>(
   matcher:
     | string
@@ -401,8 +373,43 @@ function patchComponent<P = {}>(
   }
 }
 
+// Runtime Patching
+//
+// Both React module variants are intercepted the same way via forEachExport:
+// find every matching module (existing + future), wrap the render function so
+// all element types pass through resolveType before React sees them.
+//
+// resolveType is the single source of truth — a patchComponent registration
+// applies regardless of which transform Slack uses for a given module.
+//
+export const reactPromise: Promise<typeof import('react')> = new Promise(
+  (resolve) => {
+    forEachExport(isReact, (React) => {
+      const originalCreateElement = React.createElement
+      React.createElement = (type: any, props: any, ...children: any[]) =>
+        originalCreateElement(resolveType(type, props), props, ...children)
+      global.React = React
+      resolve(React)
+    })
+  }
+)
+
+export const jsxRuntimePromise: Promise<void> = new Promise((resolve) => {
+  forEachExport(isJsxRuntime, (rt) => {
+    const originalJsx = rt.jsx as (type: any, props: any, key: any) => any
+    const originalJsxs = rt.jsxs as (type: any, props: any, key: any) => any
+    rt.jsx = (type: any, props: any, key: any) =>
+      originalJsx(resolveType(type, props), props, key)
+    rt.jsxs = (type: any, props: any, key: any) =>
+      originalJsxs(resolveType(type, props), props, key)
+    resolve()
+  })
+})
+
+// patchComponentPromise: expose patchComponent once both runtimes are patched.
 export const patchComponentPromise = (async () => {
   await reactPromise
+  await jsxRuntimePromise
   global.patchComponent = patchComponent
   return patchComponent
 })()

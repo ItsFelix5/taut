@@ -9,10 +9,27 @@ const global = globalThis as any
 let __webpack_require__: any = null
 const __webpackModuleRegistry = new Map<string | number, any>()
 
-// Export Waiting
+// Export Matching Helpers
 
 type ExportMatcher<T> = (exp: any) => exp is T
 type SimpleMatcher = (exp: any) => boolean
+
+// Run a matcher against an export and each of its own enumerable properties
+// Returns the first matching value, or undefined if nothing matches
+function matchExportOrProps(exports: any, matcher: SimpleMatcher): any {
+  if (matcher(exports)) return exports
+  if (exports && typeof exports === 'object') {
+    for (const key in exports) {
+      if (!Object.prototype.hasOwnProperty.call(exports, key)) continue
+      try {
+        if (matcher(exports[key])) return exports[key]
+      } catch {}
+    }
+  }
+  return undefined
+}
+
+// Export Waiting
 
 const pendingMatchers = new Map<
   symbol,
@@ -30,15 +47,8 @@ export function waitForExport<T extends any>(matcher: SimpleMatcher): Promise<T>
 export function waitForExport(matcher: SimpleMatcher): Promise<any> {
   // Check existing exports first
   for (const [_id, exp] of __webpackModuleRegistry) {
-    if (matcher(exp)) return Promise.resolve(exp)
-    if (exp && typeof exp === 'object') {
-      for (const key in exp) {
-        if (!Object.prototype.hasOwnProperty.call(exp, key)) continue
-        try {
-          if (matcher(exp[key])) return Promise.resolve(exp[key])
-        } catch {}
-      }
-    }
+    const found = matchExportOrProps(exp, matcher)
+    if (found !== undefined) return Promise.resolve(found)
   }
 
   // Not found yet, register a pending matcher
@@ -55,23 +65,43 @@ export function waitForExport(matcher: SimpleMatcher): Promise<any> {
 }
 
 function checkPendingMatchers(exports: any) {
-  for (const [id, { matcher, resolve }] of pendingMatchers) {
-    if (matcher(exports)) {
-      resolve(exports)
-      continue
-    }
-    if (exports && typeof exports === 'object') {
-      for (const key in exports) {
-        if (!Object.prototype.hasOwnProperty.call(exports, key)) continue
-        try {
-          if (matcher(exports[key])) {
-            resolve(exports[key])
-            break
-          }
-        } catch {}
-      }
-    }
+  for (const [_id, { matcher, resolve }] of pendingMatchers) {
+    const found = matchExportOrProps(exports, matcher)
+    if (found !== undefined) resolve(found)
   }
+}
+
+// Module Load Callbacks
+
+const moduleLoadCallbacks: ((exports: any) => void)[] = []
+
+export function onModuleLoaded(cb: (exports: any) => void): void {
+  moduleLoadCallbacks.push(cb)
+}
+
+/**
+ * Run a callback for every export matching the given predicate — both those
+ * already in the registry and any that load in the future.
+ */
+export function forEachExport(
+  matcher: SimpleMatcher,
+  cb: (exp: any) => void
+): void {
+  const seen = new WeakSet<object>()
+  function fire(found: any) {
+    if (typeof found !== 'object' && typeof found !== 'function') return
+    if (seen.has(found)) return
+    seen.add(found)
+    cb(found)
+  }
+  for (const exp of __webpackModuleRegistry.values()) {
+    const found = matchExportOrProps(exp, matcher)
+    if (found !== undefined) fire(found)
+  }
+  onModuleLoaded((exp) => {
+    const found = matchExportOrProps(exp, matcher)
+    if (found !== undefined) fire(found)
+  })
 }
 
 // Factory Wrapping
@@ -86,6 +116,7 @@ function wrapModuleFactory(
     const moduleExports = module.exports
     __webpackModuleRegistry.set(moduleId, moduleExports)
     checkPendingMatchers(moduleExports)
+    for (const cb of moduleLoadCallbacks) cb(moduleExports)
 
     return result
   }
@@ -170,6 +201,8 @@ export const webpackLoaded = new Promise<void>((resolve) => {
     window.addEventListener('load', () => resolve())
   }
 })
+
+// Post-load Lookups
 
 function allExports(): [string, any][] {
   return Array.from(__webpackModuleRegistry.entries()).map(([id, exp]) => [
