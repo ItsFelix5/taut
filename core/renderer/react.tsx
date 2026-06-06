@@ -128,39 +128,19 @@ export const findComponentPromise = (async () => {
 
 // Fiber Utilities (promise-wrapped)
 
-function getRootFiber() {
+function getRootFiber(): object | null {
   const container = document.querySelector('.p-client_container')
-  if (!container) throw new Error('Could not find root container')
+  if (!container) return null
   const key = Object.keys(container).find((k) =>
     k.startsWith('__reactContainer$')
   )
-  if (!key) throw new Error('Could not find root fiber key on container')
-  const rootFiber = (container as any)[key]
-  return rootFiber
+  if (!key) return null
+  return (container as any)[key]
 }
-
-// function getFiberRoot() {
-//   const __REACT_DEVTOOLS_GLOBAL_HOOK__ = global.__REACT_DEVTOOLS_GLOBAL_HOOK__
-//   if (!__REACT_DEVTOOLS_GLOBAL_HOOK__) {
-//     throw new Error('React DevTools hook not found')
-//   }
-//   return [...__REACT_DEVTOOLS_GLOBAL_HOOK__?.getFiberRoots?.(1)]?.[0]
-// }
-
-// export const getRootPromise = (async () => {
-//   const ReactDOMClient = await reactDOMClientPromise
-
-//   return function getRoot() {
-//     const tempRoot = ReactDOMClient.createRoot(document.createElement('div'))
-//     tempRoot.unmount()
-//     const ReactDOMRoot = tempRoot.constructor as new (fiberRoot: any) => Root
-//     const fiberRoot = getFiberRoot()
-//     return new ReactDOMRoot(fiberRoot)
-//   }
-// })()
 
 function dirtyMemoizationCache() {
   const rootFiber = getRootFiber()
+  if (!rootFiber) return
 
   const poison = (node: any) => {
     if (!node) return
