@@ -7,11 +7,9 @@ import {
   reactPromise,
   findComponentPromise,
   patchComponentPromise,
-  reactDOMPromise,
-  reactDOMClientPromise,
 } from './react'
 import { setStyle, removeStyle } from './css'
-import { TypedEventTarget } from './helpers'
+import { TypedEventTarget, deepEqual } from './helpers'
 
 import {
   TautPlugin,
@@ -34,8 +32,6 @@ export const tautAPIPromise = (async () => {
     patchComponent: await patchComponentPromise,
     commonModules: {
       react: await reactPromise,
-      reactDOM: await reactDOMPromise,
-      reactDOMClient: await reactDOMClientPromise,
     },
   }
   global.TautAPI = TautAPI
@@ -54,6 +50,7 @@ export class PluginManager extends TypedEventTarget<{
       instance: TautPlugin | null
     }
   >()
+  private prevPluginConfigs = new Map<string, TautPluginConfig>()
 
   constructor(
     protected bridge: TautBridge,
@@ -67,6 +64,8 @@ export class PluginManager extends TypedEventTarget<{
 
     this.configStore.onConfigChange((newConfig) => {
       for (const [name, pluginConfig] of Object.entries(newConfig.plugins)) {
+        if (deepEqual(this.prevPluginConfigs.get(name), pluginConfig)) continue
+        this.prevPluginConfigs.set(name, structuredClone(pluginConfig))
         this.updatePluginConfig(name, pluginConfig)
       }
     })
@@ -117,6 +116,7 @@ export class PluginManager extends TypedEventTarget<{
         }
       }
 
+      this.prevPluginConfigs.set(name, structuredClone(config))
       this.plugins.set(name, { PluginClass, instance })
       this.emit('pluginInfoChanged', this.getPluginInfo())
       console.log(`[Taut] Plugin ${name} loaded`)

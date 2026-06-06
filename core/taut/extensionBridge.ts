@@ -111,7 +111,6 @@ export const extensionBridge: TautBridge = {
     try {
       lastWritten.set(CONFIG_KEY, text)
       await storageSet(CONFIG_KEY, text)
-      for (const cb of configTextCallbacks) cb(text)
       return true
     } catch {
       return false
@@ -131,7 +130,6 @@ export const extensionBridge: TautBridge = {
     try {
       lastWritten.set(CSS_KEY, text)
       await storageSet(CSS_KEY, text)
-      for (const cb of userCssCallbacks) cb(text)
       return true
     } catch {
       return false

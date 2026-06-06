@@ -56,13 +56,6 @@ export const UserscriptBackend: TautBridge = {
   async writeConfigText(text: string): Promise<boolean> {
     try {
       GM_setValue(CONFIG_KEY, text)
-      for (const cb of configTextCallbacks) {
-        try {
-          cb(text)
-        } catch (err) {
-          console.error('[Taut] Error in onConfigTextChange callback:', err)
-        }
-      }
       return true
     } catch {
       return false
@@ -81,13 +74,6 @@ export const UserscriptBackend: TautBridge = {
   async writeUserCss(text: string): Promise<boolean> {
     try {
       GM_setValue(USER_CSS_KEY, text)
-      for (const cb of userCssCallbacks) {
-        try {
-          cb(text)
-        } catch (err) {
-          console.error('[Taut] Error in onUserCssChange callback:', err)
-        }
-      }
       return true
     } catch {
       return false
