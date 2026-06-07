@@ -2,12 +2,12 @@
 // Runs in the browser page context
 // Loads and manages plugins via TautBridge
 
-import { findExportPromise, findByPropsPromise } from './webpack'
+import { findExportPromise, findByPropsPromise } from './slack/webpack'
 import {
   reactPromise,
   findComponentPromise,
   patchComponentPromise,
-} from './react'
+} from './slack/react'
 import { setStyle, removeStyle } from './css'
 import { TypedEventTarget, deepEqual } from './helpers'
 

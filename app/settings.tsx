@@ -6,7 +6,7 @@ import {
   reactPromise,
   findComponentPromise,
   patchComponentPromise,
-} from './react'
+} from './slack/react'
 import type { ConfigStore } from './configStore'
 import type { PluginInfo, PluginManager } from './pluginManager'
 import { initMonaco, type Monaco } from './cdn'
@@ -170,9 +170,7 @@ function ConfigEditor({ configStore }: { configStore: ConfigStore }) {
 
   return (
     <div>
-      {paths && (
-        <MrkdwnElement text={`Editing \`${paths.display.config}\``} />
-      )}
+      {paths && <MrkdwnElement text={`Editing \`${paths.display.config}\``} />}
       {!paths && (
         <MrkdwnElement
           text={`Editing config (stored in ${
@@ -236,9 +234,7 @@ function UserCssEditor({ configStore }: { configStore: ConfigStore }) {
 
   return (
     <div>
-      {paths && (
-        <MrkdwnElement text={`Editing \`${paths.display.userCss}\``} />
-      )}
+      {paths && <MrkdwnElement text={`Editing \`${paths.display.userCss}\``} />}
       {!paths && (
         <MrkdwnElement
           text={`Editing user.css (stored in ${

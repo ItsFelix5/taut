@@ -4,7 +4,7 @@
 
 import type { TautAPI } from '../app/pluginManager'
 export type { TautAPI } from '../app/pluginManager'
-export type { ComponentType, componentReplacer } from '../app/react'
+export type { ComponentType, componentReplacer } from '../app/slack/react'
 
 export interface TautPluginConfig {
   enabled: boolean

@@ -18,7 +18,14 @@ frontend), TypeScript ESM with JSX
   `bootstrap.ts`.
 - `bootstrap.ts`: Wires up the backend, config store, and starts plugins.
 - `pluginManager.ts`: Contains the `PluginManager` class and `TautAPI`.
+- `configStore.ts`: In-memory store for config.jsonc and user.css with change
+  notifications.
+- `settings.tsx`: Adds a "Taut" tab to Slack's Preferences dialog.
+- `cdn.ts`: Loads Monaco editor and jsonc-parser from CDN at runtime.
 - `css.ts`: Utilities for injecting and removing CSS styles.
-- `react.tsx`: React utilities, including `patchComponent` for replacing Slack
-  components at runtime.
-- `webpack.ts`: Webpack utilities for finding Slack's internal modules
+- `helpers.ts`: Shared utilities for the Taut app.
+- `env.d.ts`: Ambient module declarations.
+- `slack/`: Utilities for interfacing with Slack's internals.
+  - `webpack.ts`: Webpack utilities for finding Slack's internal modules.
+  - `react.tsx`: React utilities, including `patchComponent` for replacing Slack
+    components at runtime.
