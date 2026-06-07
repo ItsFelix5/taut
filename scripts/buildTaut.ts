@@ -59,7 +59,7 @@ async function bundlePlugins(debug: boolean): Promise<Record<string, string>> {
 
   for (const file of fs
     .readdirSync(PLUGINS_DIR)
-    .filter((f) => /\.[tj]sx?$/.test(f))) {
+    .filter((f) => /\.[tj]sx?$/.test(f) && !f.includes('.disabled.'))) {
     const name = path.basename(file, path.extname(file))
     console.log(`[build-taut] Bundling plugin: ${name}`)
 

@@ -1,4 +1,5 @@
 // Shows Hackatime trust level indicators next to user names in Slack
+// Broken because the Hackatime API changed
 
 import { TautPlugin, type TautPluginConfig, type TautAPI } from '$taut'
 
