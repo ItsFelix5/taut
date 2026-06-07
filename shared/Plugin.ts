@@ -68,16 +68,21 @@ export interface TautPluginConstructor {
   readonly defaultConfig?: string
 }
 
+type DeltaOp = (
+  | { insert?: string | object }
+  | { delete?: number }
+  | { retain?: number }
+) & {
+  attributes?: Record<string, any>
+}
+
 /**
- * A Delta object from Quill Delta, representing a document or change.
+ * A Quill Delta instance
  * @see https://github.com/slab/delta
  */
-export type Delta = {
-  ops: ((
-    | { insert?: string | object }
-    | { delete?: number }
-    | { retain?: number }
-  ) & {
-    attributes?: Record<string, any>
-  })[]
+export declare class Delta {
+  // Private brand prevents `{ ops: [...] }` from satisfying this type
+  // Transforms must return the original instance (mutating ops most likely)
+  private _quillDeltaBrand: never
+  ops: DeltaOp[]
 }
