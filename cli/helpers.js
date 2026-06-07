@@ -257,7 +257,7 @@ export async function findSlackInstall() {
  */
 export async function checkWriteAccess(dir) {
   try {
-    await fs.access(dir, constants.W_OK)
+    await fs.access(path.join(dir, 'app.asar'), constants.W_OK)
     return true
   } catch {
     return false

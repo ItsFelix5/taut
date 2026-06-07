@@ -103,7 +103,7 @@ export async function bundle(
           build.onLoad(
             { filter: /.*/, namespace: 'local-fs' },
             async (args) => {
-              if (useGlobalTautPlugin && args.path.endsWith('core/Plugin.ts')) {
+              if (useGlobalTautPlugin && path.basename(args.path) === 'Plugin.ts') {
                 return {
                   contents: `
                     export const TautPlugin = globalThis.TautPlugin
