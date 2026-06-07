@@ -14,6 +14,7 @@ export default class SilentTyping extends TautPlugin {
     }
   `
 
+  private static readonly STORAGE_KEY = 'taut_silent_typing_suppressed'
   private suppressed = false
   private readonly listeners = new Set<(v: boolean) => void>()
   private originalSend: typeof WebSocket.prototype.send | null = null
@@ -21,10 +22,13 @@ export default class SilentTyping extends TautPlugin {
 
   private setSuppressed(v: boolean) {
     this.suppressed = v
+    localStorage.setItem(SilentTyping.STORAGE_KEY, String(v))
     for (const l of this.listeners) l(v)
   }
 
   start(): void {
+    this.suppressed = localStorage.getItem(SilentTyping.STORAGE_KEY) === 'true'
+
     const instance = this
 
     this.originalSend = WebSocket.prototype.send
