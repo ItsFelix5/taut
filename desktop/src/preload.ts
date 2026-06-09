@@ -6,39 +6,6 @@ declare const __TAUT_LOADER_VERSION__: string
 
 const { contextBridge, ipcRenderer } = require('electron')
 
-contextBridge.exposeInMainWorld('TautBridge', {
-  loader: 'electron' as const,
-  loaderVersion: __TAUT_LOADER_VERSION__,
-  bridgeVersion: 1,
-  PATHS: null,
-
-  start: () => ipcRenderer.invoke('taut:setup-watchers'),
-
-  readConfigText: () => ipcRenderer.invoke('taut:read-config-text'),
-  writeConfigText: (text: string) =>
-    ipcRenderer.invoke('taut:write-config-text', text),
-
-  onConfigTextChange(cb: (text: string) => void) {
-    const handler = (_: unknown, text: string) => cb(text)
-    ipcRenderer.on('taut:config-text-changed', handler)
-    return () => ipcRenderer.removeListener('taut:config-text-changed', handler)
-  },
-
-  readUserCss: () => ipcRenderer.invoke('taut:read-user-css'),
-  writeUserCss: (css: string) => ipcRenderer.invoke('taut:write-user-css', css),
-
-  onUserCssChange(cb: (css: string) => void) {
-    const handler = (_: unknown, css: string) => cb(css)
-    ipcRenderer.on('taut:user-css-changed', handler)
-    return () => ipcRenderer.removeListener('taut:user-css-changed', handler)
-  },
-
-  // CORS bypassed via webRequest in main process
-  fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
-
-  warnOutdated: () => ipcRenderer.invoke('taut:warn-outdated'),
-} satisfies TautBridge)
-
 document.open()
 document.write('<!DOCTYPE html>')
 document.close()
@@ -49,6 +16,7 @@ const origPreloadPromise = ipcRenderer.invoke(
 ) as Promise<string | null>
 const origHtmlPromise = fetch(location.href).then((r) => r.text())
 const appUrlPromise = ipcRenderer.invoke('taut:get-app-url') as Promise<string>
+const pathsPromise = ipcRenderer.invoke('taut:get-paths')
 
 ;(async () => {
   try {
@@ -77,6 +45,43 @@ const appUrlPromise = ipcRenderer.invoke('taut:get-app-url') as Promise<string>
   } catch {
     appUrl = 'https://jer.app/taut/taut.js'
   }
+
+  const paths = await pathsPromise
+
+  contextBridge.exposeInMainWorld('TautBridge', {
+    loader: 'electron' as const,
+    loaderVersion: __TAUT_LOADER_VERSION__,
+    bridgeVersion: 1,
+    PATHS: paths,
+
+    start: () => ipcRenderer.invoke('taut:setup-watchers'),
+
+    readConfigText: () => ipcRenderer.invoke('taut:read-config-text'),
+    writeConfigText: (text: string) =>
+      ipcRenderer.invoke('taut:write-config-text', text),
+
+    onConfigTextChange(cb: (text: string) => void) {
+      const handler = (_: unknown, text: string) => cb(text)
+      ipcRenderer.on('taut:config-text-changed', handler)
+      return () =>
+        ipcRenderer.removeListener('taut:config-text-changed', handler)
+    },
+
+    readUserCss: () => ipcRenderer.invoke('taut:read-user-css'),
+    writeUserCss: (css: string) =>
+      ipcRenderer.invoke('taut:write-user-css', css),
+
+    onUserCssChange(cb: (css: string) => void) {
+      const handler = (_: unknown, css: string) => cb(css)
+      ipcRenderer.on('taut:user-css-changed', handler)
+      return () => ipcRenderer.removeListener('taut:user-css-changed', handler)
+    },
+
+    // CORS bypassed via webRequest in main process
+    fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+
+    warnOutdated: () => ipcRenderer.invoke('taut:warn-outdated'),
+  } satisfies TautBridge)
 
   // Parse, remove CSP, inject taut.js as first script in <head>
   const doc = new DOMParser().parseFromString(html, 'text/html')

@@ -3,6 +3,7 @@
 
 import { promises as fs, watch } from 'fs'
 import { ipcMain } from 'electron'
+import os from 'os'
 import path from 'path'
 
 export interface BridgeConfig {
@@ -26,6 +27,29 @@ export function setupBridge(
     openOptionsWindow: () => void
   }
 ) {
+  ipcMain.handle('taut:get-paths', () => {
+    const home = os.homedir()
+    const dp = (p: string) =>
+      p.startsWith(home) ? '~' + p.slice(home.length) : p
+    const tautDir = config.configDir
+    const configFile = path.join(tautDir, 'config.jsonc')
+    const userCssFile = path.join(tautDir, 'user.css')
+    return {
+      tautDir,
+      plugins: path.join(tautDir, 'plugins'),
+      userPlugins: path.join(tautDir, 'plugins'),
+      config: configFile,
+      userCss: userCssFile,
+      display: {
+        tautDir: dp(tautDir),
+        plugins: dp(path.join(tautDir, 'plugins')),
+        userPlugins: dp(path.join(tautDir, 'plugins')),
+        config: dp(configFile),
+        userCss: dp(userCssFile),
+      },
+    }
+  })
+
   ipcMain.handle('taut:get-app-url', () => opts.getAppUrl())
   ipcMain.handle('taut:set-app-url', async (_, url: string) => {
     await opts.setAppUrl(url)
