@@ -128,6 +128,33 @@ if (slackArgUrl) {
   })
 }
 
+process.on('uncaughtException', (err) => {
+  console.error('[Taut] Uncaught exception:', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[Taut] Unhandled rejection:', reason)
+})
+app.on('before-quit', (e) => {
+  console.log('[Taut] App quitting (before-quit fired)')
+})
+app.on('window-all-closed', () => {
+  console.log('[Taut] All windows closed')
+})
+
 // Load Slack
 console.log(`[Taut] Loading Slack from ${slackAsarPath}`)
-cjsRequire(slackAsarPath)
+try {
+  cjsRequire(slackAsarPath)
+} catch (err) {
+  console.error('[Taut] Failed to load Slack:', err)
+  app.whenReady().then(() => {
+    dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Taut',
+      message: 'Failed to load Slack',
+      detail: String(err),
+      buttons: ['Quit'],
+    })
+    app.exit(1)
+  })
+}
