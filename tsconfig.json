@@ -30,6 +30,7 @@
     "dist",
     "tmp*",
     "extension/chrome/taut.js",
-    "extension/firefox/taut.js"
+    "extension/firefox/taut.js",
+    "server"
   ]
 }
