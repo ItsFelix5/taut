@@ -212,16 +212,29 @@ async function buildJs(variant: Variant) {
     })
   )
 
-  const optionsHtml = (
-    await readFile(path.join(ROOT, 'shared', 'options.html'), 'utf8')
+  const substituteOptions = (src: string) =>
+    src
+      .replace(/__TAUT_EMBEDDED__/g, String(isEmbedded))
+      .replace(/__TAUT_RUNTIME__/g, "'electron'")
+      .replace(
+        /__TAUT_EMBEDDED_VERSION__/g,
+        isEmbedded ? `'${TAUT_VERSION}'` : "''"
+      )
+
+  await writeFile(
+    path.join(STAGE, 'options.html'),
+    substituteOptions(
+      await readFile(path.join(ROOT, 'shared', 'options.html'), 'utf8')
+    ),
+    'utf8'
   )
-    .replace(/__TAUT_EMBEDDED__/g, String(isEmbedded))
-    .replace(/__TAUT_RUNTIME__/g, "'electron'")
-    .replace(
-      /__TAUT_EMBEDDED_VERSION__/g,
-      isEmbedded ? `'${TAUT_VERSION}'` : "''"
-    )
-  await writeFile(path.join(STAGE, 'options.html'), optionsHtml, 'utf8')
+  await writeFile(
+    path.join(STAGE, 'options.js'),
+    substituteOptions(
+      await readFile(path.join(ROOT, 'shared', 'options.js'), 'utf8')
+    ),
+    'utf8'
+  )
 }
 
 // electron-builder config per (variant, platform)

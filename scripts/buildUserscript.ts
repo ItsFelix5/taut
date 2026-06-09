@@ -30,6 +30,10 @@ const optionsHtmlRaw = await readFile(
   path.join(ROOT, 'shared', 'options.html'),
   'utf8'
 )
+const optionsJsRaw = await readFile(
+  path.join(ROOT, 'shared', 'options.js'),
+  'utf8'
+)
 
 async function build(embedded: boolean) {
   const suffix = embedded ? '-embedded' : ''
@@ -52,13 +56,20 @@ async function build(embedded: boolean) {
     header = header.replace(/^\/\/ @(?:updateURL|downloadURL)\s+.*\n/gm, '')
   }
 
-  const optionsHtml = optionsHtmlRaw
-    .replace(/__TAUT_EMBEDDED__/g, String(embedded))
-    .replace(/__TAUT_RUNTIME__/g, "'userscript'")
-    .replace(
-      /__TAUT_EMBEDDED_VERSION__/g,
-      embedded ? `'${TAUT_VERSION}'` : "''"
-    )
+  const substituteOptions = (src: string) =>
+    src
+      .replace(/__TAUT_EMBEDDED__/g, String(embedded))
+      .replace(/__TAUT_RUNTIME__/g, "'userscript'")
+      .replace(
+        /__TAUT_EMBEDDED_VERSION__/g,
+        embedded ? `'${TAUT_VERSION}'` : "''"
+      )
+
+  const optionsJs = substituteOptions(optionsJsRaw)
+  const optionsHtml = substituteOptions(optionsHtmlRaw).replace(
+    '<script src="options.js"></script>',
+    `<script>\n${optionsJs}\n</script>`
+  )
 
   const tautAppJs = embedded ? await readFile(TAUT_JS, 'utf8') : ''
 

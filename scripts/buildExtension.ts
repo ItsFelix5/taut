@@ -60,16 +60,25 @@ for (const browser of BROWSERS) {
 
     entries['bridge-setup.js'] = enc.encode(bridgeSetup)
 
-    const optionsHtml = (
-      await readFile(path.join(ROOT, 'shared', 'options.html'), 'utf8')
-    )
-      .replace(/__TAUT_EMBEDDED__/g, String(isEmbedded))
-      .replace(/__TAUT_RUNTIME__/g, `'${browser}'`)
-      .replace(
-        /__TAUT_EMBEDDED_VERSION__/g,
-        isEmbedded ? `'${TAUT_VERSION}'` : "''"
+    const substituteOptions = (src: string) =>
+      src
+        .replace(/__TAUT_EMBEDDED__/g, String(isEmbedded))
+        .replace(/__TAUT_RUNTIME__/g, `'${browser}'`)
+        .replace(
+          /__TAUT_EMBEDDED_VERSION__/g,
+          isEmbedded ? `'${TAUT_VERSION}'` : "''"
+        )
+
+    entries['options.html'] = enc.encode(
+      substituteOptions(
+        await readFile(path.join(ROOT, 'shared', 'options.html'), 'utf8')
       )
-    entries['options.html'] = enc.encode(optionsHtml)
+    )
+    entries['options.js'] = enc.encode(
+      substituteOptions(
+        await readFile(path.join(ROOT, 'shared', 'options.js'), 'utf8')
+      )
+    )
 
     const manifest = await Bun.file(path.join(srcDir, 'manifest.json')).json()
     if (isEmbedded) {
