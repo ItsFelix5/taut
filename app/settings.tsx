@@ -14,8 +14,6 @@ import { tautVersion } from './bundledData'
 
 type MonacoEditorInstance = ReturnType<Monaco['editor']['create']>
 
-let monaco: Monaco
-
 type ButtonProps = {
   type?: 'primary' | 'ghost' | 'outline' | 'danger'
   size?: 'small' | 'medium' | 'large'
@@ -35,7 +33,9 @@ export async function addSettingsTab(
   configStore: ConfigStore
 ) {
   await reactPromise
-  monaco = await initMonaco()
+
+  void initMonaco()
+
   const findComponent = await findComponentPromise
   const patchComponent = await patchComponentPromise
 
@@ -62,7 +62,7 @@ export async function addSettingsTab(
     const [isTautSelected, setIsTautSelected] = React.useState(false)
 
     const tabs = [...props.tabs]
-    if (tabs[tabs.length - 1].id === 'advanced') {
+    if (tabs[tabs.length - 1]?.id === 'advanced') {
       tabs.push({
         'id': 'taut',
         'label': <>Taut</>,
@@ -129,7 +129,7 @@ function TautSettings({
         Taut Settings
       </div>
       <MrkdwnElement
-        text={`<#C0A057686SF> v${tautVersion} | ${loaderName} v${bridge.loaderVersion} | | <https://github.com/jeremy46231/taut|Repository>`}
+        text={`<#C0A057686SF> v${tautVersion} | ${loaderName} v${bridge.loaderVersion} | <https://github.com/jeremy46231/taut|Repository>`}
       />
       {paths && (
         <MrkdwnElement
@@ -287,6 +287,7 @@ function MonacoEditor({
   language,
   value,
   onChange,
+  style,
   ...props
 }: EditorProps &
   Omit<React.HTMLAttributes<HTMLDivElement>, keyof EditorProps>) {
@@ -294,33 +295,45 @@ function MonacoEditor({
   const editorRef = React.useRef<MonacoEditorInstance | null>(null)
   /** if the editor is currently updating its value externally, so don't fire onChange */
   const isUpdatingRef = React.useRef(false)
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     if (!containerRef.current) return
+    let cancelled = false
+    let cleanup = () => {}
 
-    const editor = monaco.editor.create(containerRef.current, {
-      value,
-      language,
-      automaticLayout: true,
-      theme: 'taut',
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      lineNumbers: 'on',
-      tabSize: 2,
-    })
+    ;(async () => {
+      const monaco = await initMonaco()
+      if (cancelled || !containerRef.current) return
 
-    editorRef.current = editor
+      const editor = monaco.editor.create(containerRef.current, {
+        value,
+        language,
+        automaticLayout: true,
+        theme: 'taut',
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        lineNumbers: 'on',
+        tabSize: 2,
+      })
+      editorRef.current = editor
+      setLoading(false)
 
-    const sub = editor.onDidChangeModelContent(() => {
-      if (isUpdatingRef.current) return
-      const text = editor.getValue()
-      onChange(text)
-    })
+      const sub = editor.onDidChangeModelContent(() => {
+        if (isUpdatingRef.current) return
+        onChange(editor.getValue())
+      })
+
+      cleanup = () => {
+        sub.dispose()
+        editor.dispose()
+        editorRef.current = null
+      }
+    })()
 
     return () => {
-      sub.dispose()
-      editor.dispose()
-      editorRef.current = null
+      cancelled = true
+      cleanup()
     }
   }, [language])
 
@@ -336,7 +349,16 @@ function MonacoEditor({
     }
   }, [value])
 
-  return <div ref={containerRef} {...props} />
+  return (
+    <div style={style} {...props}>
+      {loading && (
+        <div style={{ padding: '8px', fontSize: '12px', color: 'var(--sk_foreground_low)' }}>
+          Monaco loading...
+        </div>
+      )}
+      <div ref={containerRef} style={{ height: loading ? '0' : '100%' }} />
+    </div>
+  )
 }
 
 function PluginList({
