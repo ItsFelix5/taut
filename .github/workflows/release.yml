@@ -54,7 +54,7 @@ jobs:
             dist/taut.debug.js \
             dist/userscript/taut.user.js \
             dist/extension/taut-chrome.zip \
-            dist/extension/taut-firefox.zip
+            dist/extension/taut-firefox.xpi
 
   release-desktop:
     name: Desktop (all platforms)

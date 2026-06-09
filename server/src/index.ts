@@ -9,7 +9,7 @@ const REDIRECTS: Record<string, string> = {
   '/taut.debug.js': `${GH}/latest/taut.debug.js`,
   '/taut.user.js': `${GH}/latest/taut.user.js`,
   '/taut-chrome.zip': `${GH}/latest/taut-chrome.zip`,
-  '/taut-firefox.zip': `${GH}/latest/taut-firefox.zip`,
+  '/taut-firefox.xpi': `${GH}/latest/taut-firefox.xpi`,
   '/taut-mac.dmg': `${GH}/latest/taut-mac.dmg`,
   '/taut-win.exe': `${GH}/latest/taut-win.exe`,
   '/taut-linux.AppImage': `${GH}/latest/taut-linux.AppImage`,

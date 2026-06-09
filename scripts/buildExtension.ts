@@ -129,7 +129,8 @@ for (const browser of BROWSERS) {
       await Bun.write(path.join(outDir, name), bytes)
     }
     const zip = zipSync(entries)
-    await Bun.write(path.join(OUT_ROOT, `taut-${browser}${suffix}.zip`), zip)
+    const ext = browser === 'firefox' ? 'xpi' : 'zip'
+    await Bun.write(path.join(OUT_ROOT, `taut-${browser}${suffix}.${ext}`), zip)
 
     console.log(`[build-extension] Built ${browser}${suffix}`)
   }
