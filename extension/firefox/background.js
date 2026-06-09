@@ -27,22 +27,50 @@
       filter.onstop = async () => {
         buffer += decoder.decode()
 
-        buffer = buffer.replace(
-          /<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*\/?>/gi,
-          ''
-        )
-
         const { tautUrl } = await browser.storage.local.get({
           tautUrl: DEFAULT_URL,
         })
 
-        const bridgeUrl = browser.runtime.getURL('bridge-setup.js')
-        const injection =
-          `<script src="${bridgeUrl}"></script>` +
-          `<script src="${tautUrl}"></script>`
-        buffer = buffer.replace(/(<head\b[^>]*>)/i, `$1${injection}`)
+        const doc = new DOMParser().parseFromString(buffer, 'text/html')
+        doc
+          .querySelector('meta[http-equiv="Content-Security-Policy"]')
+          ?.remove()
 
-        filter.write(encoder.encode(buffer))
+        // Collect and remove all script elements
+        const scripts = Array.from(doc.querySelectorAll('script')).map((s) => ({
+          src: s.src,
+          textContent: s.textContent,
+          type: s.getAttribute('type'),
+        }))
+        doc.querySelectorAll('script').forEach((s) => s.remove())
+
+        // Inject: bridge-setup (sets window.TautBridge), then taut.js, then Slack's scripts
+        const scriptError = (url) =>
+          `alert('[Taut] Failed to load a script.\\n\\nURL: ' + ${JSON.stringify(url)} + '\\n\\n${url.includes('://localhost') ? 'Make sure your server is running.' : 'Ask in #taut for help.'}')`
+
+        const bridgeScript = doc.createElement('script')
+        bridgeScript.id = 'taut-bridge'
+        bridgeScript.src = browser.runtime.getURL('bridge-setup.js')
+        bridgeScript.setAttribute('onerror', scriptError(bridgeScript.src))
+        doc.head.appendChild(bridgeScript)
+
+        const tautScript = doc.createElement('script')
+        tautScript.id = 'taut-app'
+        tautScript.src = tautUrl
+        tautScript.setAttribute('onerror', scriptError(tautScript.src))
+        doc.head.appendChild(tautScript)
+
+        for (const { src, textContent, type } of scripts) {
+          const s = doc.createElement('script')
+          if (type) s.type = type
+          if (src) s.src = src
+          else if (textContent) s.textContent = textContent
+          doc.head.appendChild(s)
+        }
+
+        filter.write(
+          encoder.encode('<!DOCTYPE html>' + doc.documentElement.outerHTML)
+        )
         filter.close()
       }
     },

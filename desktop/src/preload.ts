@@ -15,7 +15,7 @@ const origPreloadPromise = ipcRenderer.invoke(
   'taut:get-original-preload'
 ) as Promise<string | null>
 const origHtmlPromise = fetch(location.href).then((r) => r.text())
-const appUrlPromise = ipcRenderer.invoke('taut:get-app-url') as Promise<string>
+const tautUrlPromise = ipcRenderer.invoke('taut:get-app-url') as Promise<string>
 const pathsPromise = ipcRenderer.invoke('taut:get-paths')
 
 ;(async () => {
@@ -39,11 +39,11 @@ const pathsPromise = ipcRenderer.invoke('taut:get-paths')
     return
   }
 
-  let appUrl: string
+  let tautUrl: string
   try {
-    appUrl = await appUrlPromise
+    tautUrl = await tautUrlPromise
   } catch {
-    appUrl = 'https://jer.app/taut/taut.js'
+    tautUrl = 'https://jer.app/taut/taut.js'
   }
 
   const paths = await pathsPromise
@@ -83,11 +83,10 @@ const pathsPromise = ipcRenderer.invoke('taut:get-paths')
     warnOutdated: () => ipcRenderer.invoke('taut:warn-outdated'),
   } satisfies TautBridge)
 
-  // Parse, remove CSP, inject taut.js as first script in <head>
   const doc = new DOMParser().parseFromString(html, 'text/html')
   doc.querySelector('meta[http-equiv="Content-Security-Policy"]')?.remove()
 
-  // Collect and remove all scripts, then re-add in correct order
+  // Collect and remove all script elements
   const scripts = Array.from(doc.querySelectorAll('script')).map((s) => ({
     src: (s as HTMLScriptElement).src,
     textContent: s.textContent,
@@ -95,8 +94,14 @@ const pathsPromise = ipcRenderer.invoke('taut:get-paths')
   }))
   doc.querySelectorAll('script').forEach((s) => s.remove())
 
+  // Inject taut.js, then Slack's scripts
+  const scriptError = (url: string) =>
+    `alert('[Taut] Failed to load a script.\\n\\nURL: ' + ${JSON.stringify(url)} + '\\n\\n${url.includes('://localhost') ? 'Make sure your server is running.' : 'Ask in #taut for help.'}')`
+
   const tautScript = doc.createElement('script')
-  tautScript.src = appUrl
+  tautScript.id = 'taut-app'
+  tautScript.src = tautUrl
+  tautScript.setAttribute('onerror', scriptError(tautScript.src))
   doc.head.appendChild(tautScript)
 
   for (const { src, textContent, type } of scripts) {
