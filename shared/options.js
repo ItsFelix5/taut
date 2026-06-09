@@ -6,19 +6,23 @@
   /** @type {'chrome' | 'firefox' | 'electron' | 'userscript'} */
   const RUNTIME = __TAUT_RUNTIME__
   const isEmbedded = /** @type {boolean} */ (__TAUT_EMBEDDED__)
-  const embeddedVersion = /** @type {string} */ (
-    __TAUT_EMBEDDED_VERSION__
-  )
+  const embeddedVersion = /** @type {string} */ (__TAUT_EMBEDDED_VERSION__)
 
   async function getStoredUrl() {
     if (RUNTIME === 'electron' || RUNTIME === 'userscript')
-      return (await /** @type {NonNullable<Window['tautPrefs']>} */ (window.tautPrefs).getUrl()) || OFFICIAL_URL
+      return (
+        (await /** @type {NonNullable<Window['tautPrefs']>} */ (
+          window.tautPrefs
+        ).getUrl()) || OFFICIAL_URL
+      )
     if (RUNTIME === 'chrome')
-      return /** @type {Promise<string>} */ (new Promise((r) =>
-        chrome.storage.local.get({ tautUrl: OFFICIAL_URL }, (d) =>
-          r(/** @type {string} */ (d.tautUrl))
+      return /** @type {Promise<string>} */ (
+        new Promise((r) =>
+          chrome.storage.local.get({ tautUrl: OFFICIAL_URL }, (d) =>
+            r(/** @type {string} */ (d.tautUrl))
+          )
         )
-      ))
+      )
     return browser.storage.local
       .get({ tautUrl: OFFICIAL_URL })
       .then((d) => d.tautUrl)
@@ -26,11 +30,15 @@
 
   async function storeUrl(/** @type {string} */ url) {
     if (RUNTIME === 'electron' || RUNTIME === 'userscript')
-      return /** @type {NonNullable<Window['tautPrefs']>} */ (window.tautPrefs).setUrl(url)
+      return /** @type {NonNullable<Window['tautPrefs']>} */ (
+        window.tautPrefs
+      ).setUrl(url)
     if (RUNTIME === 'chrome')
-      return /** @type {Promise<void>} */ (new Promise((r) =>
-        chrome.storage.local.set({ tautUrl: url }, () => r(undefined))
-      ))
+      return /** @type {Promise<void>} */ (
+        new Promise((r) =>
+          chrome.storage.local.set({ tautUrl: url }, () => r(undefined))
+        )
+      )
     return browser.storage.local.set({ tautUrl: url })
   }
 
@@ -42,9 +50,7 @@
     return null
   }
 
-  const input = /** @type {HTMLInputElement} */ (
-    document.getElementById('url')
-  )
+  const input = /** @type {HTMLInputElement} */ (document.getElementById('url'))
   const saveBtn = /** @type {HTMLButtonElement} */ (
     document.getElementById('save')
   )
