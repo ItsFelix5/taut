@@ -17,7 +17,7 @@ export default class SilentTyping extends TautPlugin {
   private static readonly STORAGE_KEY = 'taut_silent_typing_suppressed'
   private suppressed = false
   private readonly listeners = new Set<(v: boolean) => void>()
-  private unpatchInput = () => {}
+  private unpatchInputs: Array<() => void> = []
   private unpatchButton = () => {}
 
   private setSuppressed(v: boolean) {
@@ -31,31 +31,35 @@ export default class SilentTyping extends TautPlugin {
 
     const instance = this
 
-    this.unpatchInput = this.api.patchComponent<{
-      currentUserStartedTyping?: () => void
-      currentUserEndedTyping?: () => void
-    }>('MessagePaneInput', (Original) => (props) => {
-      const [isSuppressed, setIsSuppressed] = React.useState(
-        instance.suppressed
+    for (const name of ['MessagePaneInput', 'InputContainer'] as const) {
+      this.unpatchInputs.push(
+        this.api.patchComponent<{
+          currentUserStartedTyping?: () => void
+          currentUserEndedTyping?: () => void
+        }>(name, (Original) => (props) => {
+          const [isSuppressed, setIsSuppressed] = React.useState(
+            instance.suppressed
+          )
+
+          React.useEffect(() => {
+            instance.listeners.add(setIsSuppressed)
+            return () => {
+              instance.listeners.delete(setIsSuppressed)
+            }
+          }, [])
+
+          if (isSuppressed) {
+            props = {
+              ...props,
+              currentUserStartedTyping: () => {},
+              currentUserEndedTyping: () => {},
+            }
+          }
+
+          return <Original {...props} />
+        })
       )
-
-      React.useEffect(() => {
-        instance.listeners.add(setIsSuppressed)
-        return () => {
-          instance.listeners.delete(setIsSuppressed)
-        }
-      }, [])
-
-      if (isSuppressed) {
-        props = {
-          ...props,
-          currentUserStartedTyping: () => {},
-          currentUserEndedTyping: () => {},
-        }
-      }
-
-      return <Original {...props} />
-    })
+    }
 
     const Tooltip = this.api.findComponent<{
       tip: string
@@ -141,7 +145,7 @@ export default class SilentTyping extends TautPlugin {
   }
 
   stop(): void {
-    this.unpatchInput()
+    for (const unpatch of this.unpatchInputs) unpatch()
     this.unpatchButton()
     this.api.removeStyle('silent-typing')
     this.log('Stopped')
