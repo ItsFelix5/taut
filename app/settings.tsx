@@ -293,9 +293,14 @@ function MonacoEditor({
   Omit<React.HTMLAttributes<HTMLDivElement>, keyof EditorProps>) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const editorRef = React.useRef<MonacoEditorInstance | null>(null)
+  const valueRef = React.useRef(value)
   /** if the editor is currently updating its value externally, so don't fire onChange */
   const isUpdatingRef = React.useRef(false)
   const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    valueRef.current = value
+  }, [value])
 
   React.useEffect(() => {
     if (!containerRef.current) return
@@ -307,7 +312,7 @@ function MonacoEditor({
       if (cancelled || !containerRef.current) return
 
       const editor = monaco.editor.create(containerRef.current, {
-        value,
+        value: valueRef.current,
         language,
         automaticLayout: true,
         theme: 'taut',
