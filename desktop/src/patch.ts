@@ -122,6 +122,7 @@ export function applyPatches(slackAsarPath: string, tautPreloadPath: string) {
   const pendingUrls: string[] = []
   let replaying = false
   const origOn = app.on.bind(app)
+  const origOnce = app.once.bind(app)
   const origEmit = app.emit.bind(app)
 
   function replayPending() {
@@ -140,6 +141,11 @@ export function applyPatches(slackAsarPath: string, tautPreloadPath: string) {
 
   app.on = function (event: any, listener: any) {
     const result = origOn(event, listener)
+    if (event === 'open-url') process.nextTick(replayPending)
+    return result
+  }
+  app.once = function (event: any, listener: any) {
+    const result = origOnce(event, listener)
     if (event === 'open-url') process.nextTick(replayPending)
     return result
   }
