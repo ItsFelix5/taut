@@ -16,7 +16,12 @@ let currentBuild: Promise<void> | null = null
 async function rebuild() {
   if (currentBuild) return currentBuild
 
-  currentBuild = build(true)
+  currentBuild = build(true).catch((err) => {
+    console.error(
+      '[serve-taut] Build failed, watching for changes...',
+      err.message
+    )
+  })
 
   try {
     return await currentBuild
@@ -28,7 +33,6 @@ async function rebuild() {
 await rebuild()
 for (const target of [
   path.join(ROOT, 'app'),
-  path.join(ROOT, 'loader'),
   path.join(ROOT, 'plugins'),
   path.join(ROOT, 'shared'),
   path.join(ROOT, 'package.json'),
@@ -46,12 +50,15 @@ const server = Bun.serve({
     if (url.pathname !== '/taut.js')
       return new Response('Not found', { status: 404 })
 
-    return new Response(fs.readFileSync(path.join(ROOT, 'dist', 'taut.js')), {
-      headers: {
-        'content-type': 'application/javascript; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    })
+    return new Response(
+      fs.readFileSync(path.join(ROOT, 'dist', 'taut.debug.js')),
+      {
+        headers: {
+          'content-type': 'application/javascript; charset=utf-8',
+          'cache-control': 'no-store',
+        },
+      }
+    )
   },
 })
 
